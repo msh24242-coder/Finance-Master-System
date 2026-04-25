@@ -3,64 +3,70 @@ import pandas as pd
 import plotly.express as px
 import os
 
-st.set_page_config(page_title="نظام إدارة LPO", layout="wide")
+st.set_page_config(page_title="نظام إدارة SPAR LPO", layout="wide")
 
-st.title("📊 لوحة تحكم الارتباطات المالية (LPO)")
+st.title("📊 لوحة تحكم ميزانية التسويق (SPAR)")
 
+# مسار الملف الحقيقي
 data_path = 'Data/lpo_tracker.csv'
 
 if not os.path.exists(data_path):
-    st.error(f"❌ لم يتم العثور على ملف: {data_path}")
+    st.error(f"❌ لم يتم العثور على ملف البيانات في: {data_path}")
 else:
     try:
-        # قراءة الملف
-        df = pd.read_csv(data_path)
+        # قراءة الملف مع تخطي السطر الأول (لأن العنوان يبدأ من السطر الثاني في ملفك)
+        df = pd.read_csv(data_path, skiprows=1)
         
-        # تنظيف أسماء الأعمدة لضمان عدم وجود مسافات
+        # تنظيف أسماء الأعمدة من المسافات
         df.columns = [str(c).strip() for c in df.columns]
 
-        # استخدام الأسماء الحقيقية التي ظهرت في ملفك
-        finance_col = 'total_amount'
-        company_col = 'vendor_name'
-        paid_col = 'paid_amount'
-        balance_col = 'balance'
+        # تعيين الأعمدة بناءً على ملفك الحقيقي
+        finance_col = 'finance'
+        company_col = 'company name'
+        lpo_col = 'LPO Number'
+        status_col = 'invoice'
 
-        # تحويل الأعمدة المالية لأرقام
-        for col in [finance_col, paid_col, balance_col]:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        # تحويل عمود المالية إلى أرقام (مع التعامل مع العملات إذا وجدت)
+        df[finance_col] = pd.to_numeric(df[finance_col], errors='coerce').fillna(0)
 
-        # --- عرض المؤشرات المالية (Metrics) ---
-        col1, col2, col3, col4 = st.columns(4)
+        # --- صناديق المؤشرات ---
+        col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("إجمالي قيمة الـ LPOs", f"{df[finance_col].sum():,.2f} QR")
+            st.metric("إجمالي الميزانية (LPOs)", f"{df[finance_col].sum():,.2f} QR")
         with col2:
-            st.metric("المبالغ المدفوعة", f"{df[paid_col].sum():,.2f} QR")
+            st.metric("عدد المعاملات", len(df[df[lpo_col].notna()]))
         with col3:
-            st.metric("المبالغ المتبقية", f"{df[balance_col].sum():,.2f} QR")
-        with col4:
-            st.metric("عدد المعاملات", len(df))
+            st.metric("عدد الشركات الموردة", df[company_col].nunique())
+
+        st.divider()
 
         # --- الرسوم البيانية ---
-        st.divider()
         c1, c2 = st.columns(2)
         
         with c1:
-            st.subheader("📈 أعلى 5 موردين من حيث القيمة")
-            top_vendors = df.groupby(company_col)[finance_col].sum().nlargest(5).reset_index()
+            st.subheader("🏢 أعلى 10 شركات من حيث القيمة")
+            top_vendors = df.groupby(company_col)[finance_col].sum().nlargest(10).reset_index()
             fig_bar = px.bar(top_vendors, x=company_col, y=finance_col, color=finance_col,
-                             labels={finance_col: 'الإجمالي', company_col: 'المورد'})
+                             labels={finance_col: 'الإجمالي', company_col: 'الشركة'})
             st.plotly_chart(fig_bar, use_container_width=True)
 
         with c2:
-            st.subheader("📋 حالة الدفعات")
-            if 'status' in df.columns:
-                fig_pie = px.pie(df, names='status', title="توزيع حالات الـ LPO")
-                st.plotly_chart(fig_pie, use_container_width=True)
-
-        # --- جدول البيانات ---
-        st.subheader("📑 كشف البيانات التفصيلي")
-        st.dataframe(df, use_container_width=True)
+            st.subheader("📍 توزيع المصاريف حسب الفروع")
+            # تجميع المبالغ للفروع (Tawar, 03 mall, Bsquare, etc.)
+            branches = ['Tawar', '03 mall', 'Bsquare mall', 'Almana', 'Porto', 'QQ', 'aljazzera', 'head Office']
+            branch_totals = {}
+            for b in branches:
+                if b in df.columns:
+                    branch_totals[b] = pd.to_numeric(df[b], errors='coerce').sum()
             
+            branch_df = pd.DataFrame(list(branch_totals.items()), columns=['Branch', 'Amount'])
+            fig_pie = px.pie(branch_df, values='Amount', names='Branch', hole=0.4)
+            st.plotly_chart(fig_pie, use_container_width=True)
+
+        # --- الجدول التفاعلي ---
+        st.subheader("📑 كشف البيانات الشامل")
+        st.dataframe(df[[lpo_col, company_col, finance_col, status_col, 'date']].dropna(subset=[lpo_col]), use_container_width=True)
+
     except Exception as e:
-        st.error(f"حدث خطأ أثناء المعالجة: {e}")
+        st.error(f"حدث خطأ أثناء تحميل البيانات: {e}")
+        st.info("تأكد من أن الملف مرفوع بشكل صحيح في مجلد Data")
