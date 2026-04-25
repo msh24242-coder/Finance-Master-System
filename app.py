@@ -1,39 +1,48 @@
+import streamlit as st
 import pandas as pd
+import plotly.express as px
 import os
 
-def run_finance_system():
-    # البحث عن أي ملف CSV داخل مجلد Data
-    data_dir = 'Data'
-    files = [f for f in os.listdir(data_dir) if f.endswith('.csv')]
-    
-    if not files:
-        print("❌ خطأ: لم يتم العثور على أي ملف CSV في مجلد Data")
-        return
+st.set_page_config(page_title="نظام إدارة LPO", layout="wide")
 
-    file_path = os.path.join(data_dir, files[0])
-    print(f"✅ جاري تحليل ملف: {file_path}")
+st.title("📊 لوحة تحكم الارتباطات المالية (LPO)")
 
+# التحقق من وجود المجلد والملف
+data_path = 'Data/lpo_tracker.csv'
+
+if not os.path.exists(data_path):
+    st.error(f"❌ لم يتم العثور على ملف البيانات في المسار: {data_path}")
+    st.info("تأكد من أن اسم الملف في GitHub هو lpo_tracker.csv وموجود داخل مجلد Data")
+else:
     try:
-        # قراءة الملف مع تجاهل المشاكل البسيطة
-        df = pd.read_csv(file_path)
-        df.columns = df.columns.str.strip() # تنظيف الأسماء
-
-        print("\n--- التقرير المالي المباشر ---")
+        # قراءة البيانات
+        df = pd.read_csv(data_path)
+        df.columns = df.columns.str.strip()
         
-        # حساب المبالغ من عمود finance
+        # تحويل الأرقام
         if 'finance' in df.columns:
-            # تحويل النص لأرقام لضمان الحساب الصحيح
-            df['finance_numeric'] = pd.to_numeric(df['finance'], errors='coerce').fillna(0)
-            total = df['finance_numeric'].sum()
-            print(f"💰 إجمالي الارتباطات المالية: {total}")
-        
-        # عرض الشركات
-        if 'company name' in df.columns:
-            print("\n🏢 ملخص الشركات:")
-            print(df['company name'].value_counts())
+            df['finance'] = pd.to_numeric(df['finance'], errors='coerce').fillna(0)
 
+            # --- عرض المؤشرات ---
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("إجمالي المبالغ", f"{df['finance'].sum():,.2f} QR")
+            with col2:
+                st.metric("عدد الطلبات", len(df))
+            with col3:
+                st.metric("الموردين", df['company name'].nunique() if 'company name' in df.columns else 0)
+
+            # --- الرسم البياني ---
+            if 'company name' in df.columns:
+                st.subheader("📈 توزيع المصاريف")
+                fig = px.bar(df, x='company name', y='finance', color='company name')
+                st.plotly_chart(fig, use_container_width=True)
+
+            # --- الجدول ---
+            st.subheader("📑 جدول البيانات")
+            st.dataframe(df)
+        else:
+            st.warning("⚠️ لم يتم العثور على عمود باسم 'finance' في ملفك.")
+            
     except Exception as e:
-        print(f"❌ حدث خطأ أثناء القراءة: {e}")
-
-if __name__ == "__main__":
-    run_finance_system()
+        st.error(f"حدث خطأ أثناء تحميل البيانات: {e}")
