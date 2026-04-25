@@ -3,44 +3,77 @@ import pandas as pd
 import plotly.express as px
 import os
 
-# Page Settings
-st.set_page_config(page_title="SPAR Budget Control", layout="wide")
+# 1. إعدادات الصفحة والواجهة السوداء (Pure Black Theme)
+st.set_page_config(page_title="SPAR Black Edition", layout="wide")
 
-# Styling: SPAR Green Theme & English Language
 st.markdown("""
     <style>
-    .stApp { background-color: #004d26; }
-    h1, h2, h3, p, span, label { color: #ffffff !important; font-family: 'Segoe UI'; }
-    [data-testid="stMetricValue"] { color: #00ff00 !important; }
-    .stDataFrame { background-color: #ffffff; border-radius: 10px; }
-    section[data-testid="stSidebar"] { background-color: #003d1e; border-right: 1px solid #00ff00; }
+    /* خلفية التطبيق سوداء بالكامل */
+    .stApp {
+        background-color: #000000;
+    }
+    
+    /* تغيير ألوان النصوص للأبيض */
+    h1, h2, h3, p, span, label {
+        color: #ffffff !important;
+        font-family: 'Segoe UI', sans-serif;
+    }
+
+    /* صناديق الإحصائيات (Metrics) */
+    [data-testid="stMetricValue"] {
+        color: #00ff00 !important; /* أخضر فسفوري للأرقام */
+        font-weight: bold;
+    }
+    
+    /* القائمة الجانبية سوداء بحدود خضراء */
+    section[data-testid="stSidebar"] {
+        background-color: #0a0a0a;
+        border-right: 1px solid #00ff00;
+    }
+
+    /* تحسين شكل الجداول لتناسب الخلفية السوداء */
+    .stDataFrame {
+        border: 1px solid #00ff00;
+        border-radius: 5px;
+    }
+    
+    /* أزرار الإدخال */
+    .stNumberInput input {
+        background-color: #1a1a1a !important;
+        color: white !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🟢 SPAR Marketing Monthly Budget Control")
+st.title("⬛ SPAR Marketing LPO Control - Black Edition")
 
-# 1. Sidebar for Budget & Month Selection
-st.sidebar.header("📊 Budget Setup")
-monthly_budget = st.sidebar.number_input("Set Monthly Budget (QR):", min_value=0, value=70000)
+# 2. وظيفة البحث عن الملف وتجهيز البيانات
+def find_data():
+    folder = 'Data'
+    if os.path.exists(folder):
+        files = [f for f in os.listdir(folder) if f.endswith('.csv')]
+        for f in files:
+            if 'Sheet1' in f: return os.path.join(folder, f)
+        if files: return os.path.join(folder, files[0])
+    return None
 
-# File path
-file_path = 'Data/LPO DATA 2023 jan Jihad.xlsx - Sheet1.csv'
+file_path = find_data()
 
-if not os.path.exists(file_path):
-    st.error("❌ Data file missing in 'Data' folder.")
+# 3. إعدادات الميزانية في القائمة الجانبية
+st.sidebar.header("🕹️ Control Panel")
+monthly_budget = st.sidebar.number_input("Monthly Budget (QR):", min_value=0, value=70000)
+
+if not file_path:
+    st.error("❌ Data file missing. Please check your 'Data' folder.")
 else:
     try:
-        # 2. Read Data
+        # قراءة الملف
         df = pd.read_csv(file_path, skiprows=1)
         df.columns = [str(c).strip() for c in df.columns]
-        
-        # Filter only active LPOs
         df = df[df['LPO Number'].notna()].copy()
-        
-        # 3. Create the Reference Number (Applying your Excel Formula)
-        # Formula: A&"-"&D&C&"-"&E&"-"&F&G
-        # A: NO, D: company name, C: LPO Number, E: Qutation numbr, F: finance, G: Receved
-        df['Ref_Number'] = (
+
+        # تطبيق معادلة الـ Reference الخاصة بك
+        df['Reference_Full'] = (
             df['NO'].astype(str) + "-" + 
             df['company name'].astype(str) + 
             df['LPO Number'].astype(str) + "-" + 
@@ -49,69 +82,64 @@ else:
             df['Receved '].astype(str)
         )
 
-        # 4. Handle Dates & Months
+        # معالجة الشهور
         df['date'] = pd.to_datetime(df['date'], errors='coerce')
         df['Month_Year'] = df['date'].dt.strftime('%B %Y')
+        
+        months = df['Month_Year'].dropna().unique().tolist()
+        selected_month = st.sidebar.selectbox("Select Month:", months if months else ["No Data"])
 
-        # Month Selector
-        available_months = df['Month_Year'].dropna().unique().tolist()
-        selected_month = st.sidebar.selectbox("Select Tracking Month:", available_months)
-
-        # 5. Financial Calculations for the selected month
-        mall_cols = ['Tawar', '03 mall', 'Bsquare mall', 'Almana', 'Porto', 'QQ', 'aljazzera', 'head Office']
-        for col in mall_cols:
+        # حساب المصاريف
+        malls = ['Tawar', '03 mall', 'Bsquare mall', 'Almana', 'Porto', 'QQ', 'aljazzera', 'head Office']
+        for col in malls:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-        # Filter DF for current month
         month_df = df[df['Month_Year'] == selected_month].copy()
-        month_df['Total_Spent'] = month_df[mall_cols].sum(axis=1)
+        month_df['Total_Spent'] = month_df[malls].sum(axis=1)
         
-        actual_total = month_df['Total_Spent'].sum()
-        balance = monthly_budget - actual_total
-        utilization = (actual_total / monthly_budget) * 100 if monthly_budget > 0 else 0
+        spent = month_df['Total_Spent'].sum()
+        remaining = monthly_budget - spent
+        usage = (spent / monthly_budget * 100) if monthly_budget > 0 else 0
 
-        # --- Dashboard Display ---
+        # --- عرض البيانات ---
         
-        # Metrics
+        # البطاقات العلوية
         m1, m2, m3 = st.columns(3)
         with m1:
-            st.metric("Allocated Budget", f"{monthly_budget:,.2f} QR")
+            st.metric("BUDGET LIMIT", f"{monthly_budget:,.0f} QR")
         with m2:
-            st.metric("Actual Expenses", f"{actual_total:,.2f} QR")
+            st.metric("ACTUAL SPENT", f"{spent:,.2f} QR")
         with m3:
-            st.metric("Remaining Balance", f"{balance:,.2f} QR", delta=f"{balance:,.0f}")
+            st.metric("REMAINING", f"{remaining:,.2f} QR")
 
-        # Budget Progress Bar
-        st.subheader(f"Budget Utilization: {selected_month}")
-        st.progress(min(utilization/100, 1.0))
-        st.write(f"Consumed: **{utilization:.1f}%**")
+        # بار الميزانية
+        st.write(f"### Budget Consumption: {usage:.1f}%")
+        st.progress(min(usage/100, 1.0))
 
         st.divider()
 
-        # Charts
-        l_col, r_col = st.columns(2)
-        with l_col:
+        # الرسوم البيانية (خلفية شفافة لتناسب السواد)
+        c1, c2 = st.columns(2)
+        with c1:
             st.subheader("Expenses by Branch")
-            branch_totals = month_df[mall_cols].sum().reset_index()
-            branch_totals.columns = ['Branch', 'Amount']
-            fig_pie = px.pie(branch_totals[branch_totals['Amount']>0], values='Amount', names='Branch', 
-                             hole=0.4, color_discrete_sequence=px.colors.sequential.Greens_r)
-            fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', font_color="white")
-            st.plotly_chart(fig_pie, use_container_width=True)
+            b_data = month_df[malls].sum().reset_index()
+            b_data.columns = ['Branch', 'Amount']
+            fig_p = px.pie(b_data[b_data['Amount']>0], values='Amount', names='Branch', hole=0.6,
+                           color_discrete_sequence=px.colors.sequential.Greens_r)
+            fig_p.update_layout(paper_bgcolor='rgba(0,0,0,0)', font_color="white", showlegend=True)
+            st.plotly_chart(fig_p, use_container_width=True)
 
-        with r_col:
-            st.subheader("Top Vendors this Month")
-            top_v = month_df.groupby('company name')['Total_Spent'].sum().nlargest(5).reset_index()
-            fig_bar = px.bar(top_v, x='company name', y='Total_Spent', color_discrete_sequence=['#00ff00'])
-            fig_bar.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white")
-            st.plotly_chart(fig_bar, use_container_width=True)
+        with c2:
+            st.subheader("Spending Analysis")
+            fig_b = px.bar(month_df.groupby('company name')['Total_Spent'].sum().reset_index(), 
+                           x='company name', y='Total_Spent', color_discrete_sequence=['#00ff00'])
+            fig_b.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white")
+            st.plotly_chart(fig_b, use_container_width=True)
 
-        # Detailed Table
-        st.subheader("LPO Tracker & Reference Numbers")
-        # Showing the generated Ref Number clearly in the table
-        display_cols = ['Ref_Number', 'date', 'Items', 'Total_Spent'] + mall_cols
-        st.dataframe(month_df[display_cols], use_container_width=True)
+        # الجدول التفصيلي
+        st.subheader(f"Detailed Logs: {selected_month}")
+        st.dataframe(month_df[['Reference_Full', 'date', 'Items', 'Total_Spent'] + malls], use_container_width=True)
 
     except Exception as e:
-        st.error(f"Error processing records: {e}")
+        st.error(f"Error: {e}")
