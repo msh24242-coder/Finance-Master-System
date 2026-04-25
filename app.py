@@ -16,41 +16,51 @@ else:
         # قراءة الملف
         df = pd.read_csv(data_path)
         
-        # تنظيف أسماء الأعمدة (حذف المسافات وتحويلها لأحرف صغيرة للبحث)
-        df.columns = [str(c).strip().lower() for c in df.columns]
+        # تنظيف أسماء الأعمدة لضمان عدم وجود مسافات
+        df.columns = [str(c).strip() for c in df.columns]
+
+        # استخدام الأسماء الحقيقية التي ظهرت في ملفك
+        finance_col = 'total_amount'
+        company_col = 'vendor_name'
+        paid_col = 'paid_amount'
+        balance_col = 'balance'
+
+        # تحويل الأعمدة المالية لأرقام
+        for col in [finance_col, paid_col, balance_col]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+        # --- عرض المؤشرات المالية (Metrics) ---
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("إجمالي قيمة الـ LPOs", f"{df[finance_col].sum():,.2f} QR")
+        with col2:
+            st.metric("المبالغ المدفوعة", f"{df[paid_col].sum():,.2f} QR")
+        with col3:
+            st.metric("المبالغ المتبقية", f"{df[balance_col].sum():,.2f} QR")
+        with col4:
+            st.metric("عدد المعاملات", len(df))
+
+        # --- الرسوم البيانية ---
+        st.divider()
+        c1, c2 = st.columns(2)
         
-        # البحث عن عمود المالية (سواء كان اسمه finance أو Finance أو finance )
-        finance_col = next((c for c in df.columns if 'finance' in c), None)
-        company_col = next((c for c in df.columns if 'company' in c), None)
+        with c1:
+            st.subheader("📈 أعلى 5 موردين من حيث القيمة")
+            top_vendors = df.groupby(company_col)[finance_col].sum().nlargest(5).reset_index()
+            fig_bar = px.bar(top_vendors, x=company_col, y=finance_col, color=finance_col,
+                             labels={finance_col: 'الإجمالي', company_col: 'المورد'})
+            st.plotly_chart(fig_bar, use_container_width=True)
 
-        if finance_col:
-            # تحويل البيانات لأرقام
-            df[finance_col] = pd.to_numeric(df[finance_col], errors='coerce').fillna(0)
+        with c2:
+            st.subheader("📋 حالة الدفعات")
+            if 'status' in df.columns:
+                fig_pie = px.pie(df, names='status', title="توزيع حالات الـ LPO")
+                st.plotly_chart(fig_pie, use_container_width=True)
 
-            # --- عرض المؤشرات ---
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("إجمالي المبالغ", f"{df[finance_col].sum():,.2f} QR")
-            with col2:
-                st.metric("عدد الطلبات", len(df))
-            with col3:
-                vendor_count = df[company_col].nunique() if company_col else 0
-                st.metric("عدد الموردين", vendor_count)
-
-            # --- الرسم البياني ---
-            if company_col:
-                st.subheader("📈 توزيع المصاريف حسب الشركة")
-                fig = px.bar(df, x=company_col, y=finance_col, 
-                             color=company_col, text_auto='.2s')
-                st.plotly_chart(fig, use_container_width=True)
-
-            # --- عرض الجدول الأصلي ---
-            st.subheader("📑 جدول البيانات التفصيلي")
-            st.dataframe(df, use_container_width=True)
-            
-        else:
-            st.warning("⚠️ لم أجد عموداً يحتوي على كلمة 'finance'. الأعمدة الموجودة في ملفك هي:")
-            st.write(list(df.columns))
+        # --- جدول البيانات ---
+        st.subheader("📑 كشف البيانات التفصيلي")
+        st.dataframe(df, use_container_width=True)
             
     except Exception as e:
         st.error(f"حدث خطأ أثناء المعالجة: {e}")
