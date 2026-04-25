@@ -1,0 +1,21 @@
+name: Financial Report Bot
+on:
+  push:
+    paths:
+      - 'Data/**' # سيعمل النظام تلقائياً كلما رفعت ملفاً جديداً في مجلد البيانات
+  workflow_dispatch: # يتيح لك تشغيل النظام يدوياً بضغطة زر
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: pip install pandas
+      - name: Run Finance System
+        run: python app.py
