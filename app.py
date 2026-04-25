@@ -1,28 +1,39 @@
 import pandas as pd
 
-def calculate_finance_report():
-    # 1. قراءة بيانات الـ LPOs
+# تعيين مسار الملف (تأكد أن اسم الملف هنا يطابق ما رفعته في مجلد Data)
+FILE_PATH = 'Data/lpo_tracker.csv' 
+
+def run_finance_system():
     try:
-        lpo_df = pd.read_csv('Data/lpo_tracker.csv')
+        # قراءة الملف
+        df = pd.read_csv(FILE_PATH)
         
-        # 2. حساب إجمالي الالتزامات المالية
-        total_contracted = lpo_df['Total_Amount'].sum()
-        total_paid = lpo_df['Paid_Amount'].sum()
-        total_remaining = lpo_df['Balance'].sum()
+        # تنظيف أسماء الأعمدة من أي مسافات زائدة
+        df.columns = df.columns.str.strip()
 
-        print("--- التقرير المالي العام ---")
-        print(f"إجمالي مبالغ الـ LPOs: {total_contracted}")
-        print(f"إجمالي المبالغ المدفوعة: {total_paid}")
-        print(f"إجمالي المبالغ المتبقية بذمتك: {total_remaining}")
-        print("---------------------------")
+        print("--- نظام إدارة الـ LPOs: تم تحميل البيانات بنجاح ---")
+        
+        # 1. عرض ملخص عام (بناءً على أعمدتك: LPO Number, company name, finance)
+        # ملاحظة: سنعتبر عمود 'finance' هو المبلغ الإجمالي للـ LPO
+        if 'finance' in df.columns:
+            total_finance = pd.to_numeric(df['finance'], errors='coerce').sum()
+            print(f"إجمالي قيمة الارتباطات المالية (LPOs): {total_finance}")
+        
+        # 2. البحث عن الشركات الأكثر تعاملاً
+        if 'company name' in df.columns:
+            top_vendors = df['company name'].value_counts().head(3)
+            print("\n--- أكثر 3 شركات تعاملاً معها ---")
+            print(top_vendors)
 
-        # 3. فلترة الـ LPOs غير المكتملة
-        pending = lpo_df[lpo_df['Status'] != 'Completed']
-        print("\n--- طلبات شراء (LPOs) بانتظار السداد ---")
-        print(pending[['LPO_ID', 'Vendor_Name', 'Balance']])
+        # 3. عرض حالة الاستلام (Received) والفواتير (invoice)
+        print("\n--- آخر 5 عمليات مسجلة ---")
+        columns_to_show = ['LPO Number', 'company name', 'finance', 'invoice', 'Receved']
+        # عرض الأعمدة المتاحة فقط لتجنب الأخطاء
+        existing_cols = [c for c in columns_to_show if c in df.columns]
+        print(df[existing_cols].tail())
 
-    except FileNotFoundError:
-        print("خطأ: لم يتم العثور على ملف البيانات. تأكد من وجود Data/lpo_tracker.csv")
+    except Exception as e:
+        print(f"حدث خطأ: تأكد من رفع الملف بالصيغة الصحيحة. التفاصيل: {e}")
 
-# تشغيل التقرير
-calculate_finance_report()
+if __name__ == "__main__":
+    run_finance_system()
