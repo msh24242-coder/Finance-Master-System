@@ -1,39 +1,39 @@
 import pandas as pd
-
-# تعيين مسار الملف (تأكد أن اسم الملف هنا يطابق ما رفعته في مجلد Data)
-FILE_PATH = 'Data/lpo_tracker.csv' 
+import os
 
 def run_finance_system():
+    # البحث عن أي ملف CSV داخل مجلد Data
+    data_dir = 'Data'
+    files = [f for f in os.listdir(data_dir) if f.endswith('.csv')]
+    
+    if not files:
+        print("❌ خطأ: لم يتم العثور على أي ملف CSV في مجلد Data")
+        return
+
+    file_path = os.path.join(data_dir, files[0])
+    print(f"✅ جاري تحليل ملف: {file_path}")
+
     try:
-        # قراءة الملف
-        df = pd.read_csv(FILE_PATH)
-        
-        # تنظيف أسماء الأعمدة من أي مسافات زائدة
-        df.columns = df.columns.str.strip()
+        # قراءة الملف مع تجاهل المشاكل البسيطة
+        df = pd.read_csv(file_path)
+        df.columns = df.columns.str.strip() # تنظيف الأسماء
 
-        print("--- نظام إدارة الـ LPOs: تم تحميل البيانات بنجاح ---")
+        print("\n--- التقرير المالي المباشر ---")
         
-        # 1. عرض ملخص عام (بناءً على أعمدتك: LPO Number, company name, finance)
-        # ملاحظة: سنعتبر عمود 'finance' هو المبلغ الإجمالي للـ LPO
+        # حساب المبالغ من عمود finance
         if 'finance' in df.columns:
-            total_finance = pd.to_numeric(df['finance'], errors='coerce').sum()
-            print(f"إجمالي قيمة الارتباطات المالية (LPOs): {total_finance}")
+            # تحويل النص لأرقام لضمان الحساب الصحيح
+            df['finance_numeric'] = pd.to_numeric(df['finance'], errors='coerce').fillna(0)
+            total = df['finance_numeric'].sum()
+            print(f"💰 إجمالي الارتباطات المالية: {total}")
         
-        # 2. البحث عن الشركات الأكثر تعاملاً
+        # عرض الشركات
         if 'company name' in df.columns:
-            top_vendors = df['company name'].value_counts().head(3)
-            print("\n--- أكثر 3 شركات تعاملاً معها ---")
-            print(top_vendors)
-
-        # 3. عرض حالة الاستلام (Received) والفواتير (invoice)
-        print("\n--- آخر 5 عمليات مسجلة ---")
-        columns_to_show = ['LPO Number', 'company name', 'finance', 'invoice', 'Receved']
-        # عرض الأعمدة المتاحة فقط لتجنب الأخطاء
-        existing_cols = [c for c in columns_to_show if c in df.columns]
-        print(df[existing_cols].tail())
+            print("\n🏢 ملخص الشركات:")
+            print(df['company name'].value_counts())
 
     except Exception as e:
-        print(f"حدث خطأ: تأكد من رفع الملف بالصيغة الصحيحة. التفاصيل: {e}")
+        print(f"❌ حدث خطأ أثناء القراءة: {e}")
 
 if __name__ == "__main__":
     run_finance_system()
